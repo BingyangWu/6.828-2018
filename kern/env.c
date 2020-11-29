@@ -281,7 +281,7 @@ region_alloc(struct Env *e, void *va, size_t len)
 	uintptr_t va_end = ROUNDUP((uintptr_t)va + len, PGSIZE);
 	assert(va_begin <= va_end);
 
-	for (int v = va_begin; v < va_end; v += PGSIZE) {
+	for (uintptr_t v = va_begin; v < va_end; v += PGSIZE) {
 		struct PageInfo *p = page_alloc(0);
 		assert(p);
 		assert(page_insert(e->env_pgdir, p, (void *)v, PTE_U | PTE_W) == 0);
