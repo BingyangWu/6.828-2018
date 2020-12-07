@@ -106,16 +106,17 @@ fork(void)
 	set_pgfault_handler(pgfault);
 
 	envid_t envid = sys_exofork();
+	assert(envid >= 0);
 	if (envid == 0)
 		thisenv = &envs[ENVX(sys_getenvid())];
 	else if (envid > 0) {
+		int r;
 		for (uintptr_t pg = 0; pg < USTACKTOP; pg += PGSIZE) {
-			if ((uvpd[PDX(pg)] & PTE_P) && (uvpt[PGNUM(pg)] & PTE_P)) {
-				duppage(envid, PGNUM(pg));
-			}
+			if ((uvpd[PDX(pg)] & PTE_P) && (uvpt[PGNUM(pg)] & PTE_P) && (uvpt[PGNUM(pg)] & PTE_U))
+				if ((r = duppage(envid, PGNUM(pg))) < 0)
+					return r;
 		}
 
-		int r;
 		if ((r = sys_page_alloc(envid, (void *)(UXSTACKTOP - PGSIZE), PTE_W | PTE_U | PTE_P)) < 0)
 			return r;
 		
