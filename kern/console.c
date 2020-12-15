@@ -130,6 +130,8 @@ lpt_putc(int c)
 
 /***** Text-mode CGA/VGA display output *****/
 
+#define ESC_BUF_SIZE 100
+
 static unsigned addr_6845;
 static uint16_t *crt_buf;
 static uint16_t crt_pos;
@@ -165,7 +167,7 @@ cga_init(void)
 
 
 static void
-cga_putc(int c)
+__cga_putc(int c)
 {
 	// if no attribute given, then use black on white
 	if (!(c & ~0xFF))
@@ -213,6 +215,68 @@ cga_putc(int c)
 	outb(addr_6845 + 1, crt_pos);
 }
 
+static void
+set_esc_param(int *attr_ptr, const int param) {
+	static const int ansi2cga[] = {0x0, 0x4, 0x2, 0xe, 0x1, 0x5, 0x3, 0x7};
+
+	int attr_local = *attr_ptr;
+	if (param >= 30 && param <= 37)
+		attr_local = (attr_local & ~0x0f00) | (ansi2cga[param - 30] << 8);
+	else if (param >= 40 && param <= 47)
+		attr_local = (attr_local & ~0xf000) | (ansi2cga[param - 40] << 12);
+	*attr_ptr = attr_local;
+}
+
+static void
+cga_putc(int c)
+{
+	static int attr = 0, esc_attr = 0;
+	static int state = 0;
+	static int esc_param = 0;
+
+	switch (state) {
+	case 0:
+		if ((char)c == '\033')
+			state = 1;
+		else
+			__cga_putc((c & 0xff) | attr);
+		break;
+	case 1:
+		if ((char)c == '[') {
+			state = 2;
+			esc_attr = attr;
+		}
+		else if ((char)c == '\033')
+			__cga_putc((int)'\033' | attr);
+		else {
+			state = 0;
+			__cga_putc((int)'\033' | attr);
+			__cga_putc((c & 0xff) | attr);
+		}
+		break;
+	case 2:
+		if ((char)c >= '0' && (char)c <= '9') {
+			esc_param = esc_param * 10 + c - (int)'0';
+		}
+		else if ((char)c == ';') {
+			set_esc_param(&esc_attr, esc_param);
+			esc_param = 0;
+		}
+		else if ((char)c == 'm') {
+			state = 0;
+			set_esc_param(&esc_attr, esc_param);
+			esc_param = 0;
+			attr = esc_attr;
+		}
+		else {
+			state = 0;
+			esc_param = 0;
+		}
+		break;
+	default:
+		state = 0;
+	}
+}
 
 /***** Keyboard input code *****/
 
