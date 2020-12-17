@@ -72,13 +72,13 @@ duppage(envid_t envid, unsigned pn)
 	pte_t pte = uvpt[pn];
 	void *pg = (void *)(pn * PGSIZE);
 	assert((pte & PTE_U) && (pte & PTE_P));
-	if ((pte & PTE_W) || (pte & PTE_COW)) {
-		if ((r = sys_page_map(0, pg, envid, pg, PTE_COW | PTE_U | PTE_P)) < 0)
+	if (((pte & PTE_W) && !(pte & PTE_SHARE)) || (pte & PTE_COW)) {
+		if ((r = sys_page_map(0, pg, envid, pg, (pte & PTE_SYSCALL & ~PTE_W) | PTE_COW)) < 0)
 			return r;
-		if ((r = sys_page_map(0, pg, 0, pg, PTE_COW | PTE_U | PTE_P)) < 0)
+		if ((r = sys_page_map(0, pg, 0, pg, (pte & PTE_SYSCALL & ~PTE_W) | PTE_COW)) < 0)
 			return r;
 	}
-	else if ((r = sys_page_map(0, pg, envid, pg, PTE_U | PTE_P)) < 0)
+	else if ((r = sys_page_map(0, pg, envid, pg, pte & PTE_SYSCALL)) < 0)
 		return r;
 	return 0;
 }
